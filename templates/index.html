@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pearl Detection and Coloring</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload Image to Detect Pearls</h1>
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="uploadButton">Upload Image</button>
+    
+    <div>
+        <input type="text" id="saveFileName" placeholder="Enter file name (e.g., image.png)">
+        <button id="saveImageButton">Save Image</button>
+    </div>
+
+    <h2>Coloring Options</h2>
+    <input type="color" id="penColor" value="#ff0000"> <!-- Pen color picker -->
+    <button id="penToolButton">Use Pen Tool</button>
+
+    <div>
+        <button id="zoomInButton">Zoom In</button>
+        <button id="zoomOutButton">Zoom Out</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        let pearls = [];
+        let selectedColor = "#ff0000"; // Default color for the pen tool
+        let isPenToolEnabled = false;
+        let img = null;
+        let zoomLevel = 1; // Initial zoom level
+        const zoomStep = 0.1; // Step size for zooming
+
+        // Upload image event handler
+        document.getElementById("uploadButton").addEventListener("click", async () => {
+            const fileInput = document.getElementById("fileInput");
+            const formData = new FormData();
+            formData.append("image", fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    const imageData = data.image;
+                    pearls = data.pearls;
+
+                    // Display the uploaded image on canvas
+                    const canvas = document.getElementById("canvas");
+                    const context = canvas.getContext("2d");
+                    const imgElement = new Image();
+                    imgElement.src = "data:image/png;base64," + imageData;
+
+                    imgElement.onload = () => {
+                        img = imgElement;
+                        drawImage();
+                    };
+                }
+            } catch (error) {
+                alert("Error uploading image");
+            }
+        });
+
+        // Save image event handler
+        document.getElementById("saveImageButton").addEventListener("click", async () => {
+            const saveFileName = document.getElementById("saveFileName").value || "image.png"; // Default file name
+
+            if (!saveFileName) {
+                alert("Please provide a file name.");
+                return;
+            }
+
+            const canvas = document.getElementById("canvas");
+            const imgData = canvas.toDataURL("image/png");
+
+            // Create an invisible link to trigger the download
+            const link = document.createElement("a");
+            link.href = imgData;
+            link.download = saveFileName;  // User-specified file name
+
+            // Trigger the download by simulating a click
+            link.click();
+        });
+
+        // Pen tool toggle
+        document.getElementById("penToolButton").addEventListener("click", function () {
+            isPenToolEnabled = !isPenToolEnabled;
+            alert(isPenToolEnabled ? "Pen tool enabled" : "Pen tool disabled");
+        });
+
+        // Color picker change
+        document.getElementById("penColor").addEventListener("input", function () {
+            selectedColor = this.value;
+        });
+
+        // Click on pearls to color them
+        document.getElementById("canvas").addEventListener("click", function (event) {
+            if (!isPenToolEnabled) return;
+
+            const canvasRect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - canvasRect.left;
+            const mouseY = event.clientY - canvasRect.top;
+
+            // Find pearl closest to the click
+            pearls.forEach(pearlsObj => {
+                const dist = Math.sqrt(Math.pow(mouseX - pearlsObj.x, 2) + Math.pow(mouseY - pearlsObj.y, 2));
+                if (dist < pearlsObj.radius) {
+                    const context = canvas.getContext("2d");
+                    context.beginPath();
+                    context.arc(pearlsObj.x, pearlsObj.y, pearlsObj.radius, 0, 2 * Math.PI);
+                    context.fillStyle = selectedColor;
+                    context.fill();
+                }
+            });
+        });
+
+        // Zoom In Button
+        document.getElementById("zoomInButton").addEventListener("click", () => {
+            if (zoomLevel < 3) { // Maximum zoom level
+                zoomLevel += zoomStep;
+                drawImage();
+            }
+        });
+
+        // Zoom Out Button
+        document.getElementById("zoomOutButton").addEventListener("click", () => {
+            if (zoomLevel > 0.5) { // Minimum zoom level
+                zoomLevel -= zoomStep;
+                drawImage();
+            }
+        });
+
+        // Function to draw image on the canvas with zoom
+        function drawImage() {
+            const canvas = document.getElementById("canvas");
+            const context = canvas.getContext("2d");
+            canvas.width = img.width * zoomLevel;
+            canvas.height = img.height * zoomLevel;
+            context.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+            context.drawImage(img, 0, 0, img.width * zoomLevel, img.height * zoomLevel);
+
+            // Redraw the pearls on top of the zoomed image
+            pearls.forEach(pearlsObj => {
+                context.beginPath();
+                context.arc(pearlsObj.x * zoomLevel, pearlsObj.y * zoomLevel, pearlsObj.radius * zoomLevel, 0, 2 * Math.PI);
+                context.strokeStyle = "#000000"; // Default pearl color
+                context.lineWidth = 2;
+                context.stroke();
+            });
+        }
+    </script>
+</body>
+</html>
